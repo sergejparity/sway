@@ -697,6 +697,23 @@ impl AbiEncode for raw_slice {
     }
 }
 
+impl<T> AbiEncode for &[T]
+where
+    T: AbiEncode,
+{
+    fn abi_encode(self, buffer: Buffer) -> Buffer {
+        let mut buffer = buffer;
+        let mut i = 0;
+        let len = self.len();
+        while i < len {
+            let elem = *__elem_at(self, i);
+            buffer = elem.abi_encode(buffer);
+            i += 1;
+        };
+        buffer
+    }
+}
+
 impl<T> AbiEncode for [T; 0]
 where
     T: AbiEncode,
