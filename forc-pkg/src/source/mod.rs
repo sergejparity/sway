@@ -145,6 +145,38 @@ pub struct DisplayCompiling<'a, T> {
 pub struct PinnedParseError;
 
 impl Source {
+    /// Construct a source from path information collected from manifest file.
+    fn with_path_dependency(
+        relative_path: &Path,
+        manifest_dir: &Path,
+        member_manifests: &MemberManifestFiles,
+    ) -> Result<Self> {
+        let path = manifest_dir.join(relative_path);
+        let canonical_path = path
+            .canonicalize()
+            .map_err(|e| anyhow!("Failed to canonicalize dependency path {:?}: {}", path, e))?;
+        // Check if path is a member of a workspace.
+        if member_manifests
+            .values()
+            .any(|pkg_manifest| pkg_manifest.dir() == canonical_path)
+        {
+            Ok(Source::Member(member::Source(canonical_path)))
+        } else {
+            Ok(Source::Path(canonical_path))
+        }
+    }
+
+    /// Construct a source from version information collected from manifest file.
+    fn with_version_dependency(version: &str) -> Result<Self> {
+        println!("{version}");
+        // TODO: semver parsing does not work for versions like: 0.1 or ^0.1.
+        let semver = semver::Version::parse(version)?;
+        println!("asd");
+        let source = reg::Source { version: semver };
+        println!("asd");
+        Ok(Source::Registry(source))
+    }
+
     /// Convert the given manifest `Dependency` declaration to a `Source`.
     pub fn from_manifest_dep(
         manifest_dir: &Path,
@@ -152,30 +184,16 @@ impl Source {
         member_manifests: &MemberManifestFiles,
     ) -> Result<Self> {
         let source = match dep {
-            manifest::Dependency::Simple(ref ver_str) => {
-                bail!(
-                    "Unsupported dependency declaration in \"{}\": `{}` - \
-                    currently only `git` and `path` dependencies are supported",
-                    manifest_dir.display(),
-                    ver_str
-                )
-            }
+            manifest::Dependency::Simple(ref ver_str) => Source::with_version_dependency(ver_str)?,
             manifest::Dependency::Detailed(ref det) => {
                 match (&det.path, &det.version, &det.git, &det.ipfs) {
                     (Some(relative_path), _, _, _) => {
-                        let path = manifest_dir.join(relative_path);
-                        let canonical_path = path.canonicalize().map_err(|e| {
-                            anyhow!("Failed to canonicalize dependency path {:?}: {}", path, e)
-                        })?;
-                        // Check if path is a member of a workspace.
-                        if member_manifests
-                            .values()
-                            .any(|pkg_manifest| pkg_manifest.dir() == canonical_path)
-                        {
-                            Source::Member(member::Source(canonical_path))
-                        } else {
-                            Source::Path(canonical_path)
-                        }
+                        let relative_path = PathBuf::from_str(relative_path)?;
+                        Source::with_path_dependency(
+                            &relative_path,
+                            manifest_dir,
+                            member_manifests,
+                        )?
                     }
                     (_, _, Some(repo), _) => {
                         let reference = match (&det.branch, &det.tag, &det.rev) {
@@ -197,6 +215,7 @@ impl Source {
                         let source = ipfs::Source(cid);
                         Source::Ipfs(source)
                     }
+                    (None, Some(version), _, _) => Source::with_version_dependency(&version)?,
                     _ => {
                         bail!("unsupported set of fields for dependency: {:?}", dep);
                     }

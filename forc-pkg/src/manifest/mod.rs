@@ -320,6 +320,8 @@ impl DependencyDetails {
             branch,
             tag,
             rev,
+            version,
+            ipfs,
             ..
         } = self;
 
@@ -327,6 +329,13 @@ impl DependencyDetails {
             bail!("Details reserved for git sources used without a git field");
         }
 
+        if version.is_some() && git.is_some() {
+            bail!("Both version and git details provided for dependency");
+        }
+
+        if version.is_some() && ipfs.is_some() {
+            bail!("Both version and ipfs details provided for dependency");
+        }
         Ok(())
     }
 }
