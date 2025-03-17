@@ -11,7 +11,7 @@ pub mod git;
 pub(crate) mod ipfs;
 mod member;
 pub mod path;
-mod reg;
+pub mod reg;
 
 use self::git::Url;
 use crate::manifest::GenericManifestFile;

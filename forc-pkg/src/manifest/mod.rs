@@ -288,6 +288,7 @@ pub enum Dependency {
 #[serde(rename_all = "kebab-case")]
 pub struct DependencyDetails {
     pub(crate) version: Option<String>,
+    pub(crate) namespace: Option<String>,
     pub path: Option<String>,
     pub(crate) git: Option<String>,
     pub(crate) branch: Option<String>,
@@ -322,6 +323,7 @@ impl DependencyDetails {
             rev,
             version,
             ipfs,
+            namespace,
             ..
         } = self;
 
@@ -335,6 +337,10 @@ impl DependencyDetails {
 
         if version.is_some() && ipfs.is_some() {
             bail!("Both version and ipfs details provided for dependency");
+        }
+
+        if version.is_none() && namespace.is_some() {
+            bail!("Namespace can only be specified for sources with version");
         }
         Ok(())
     }
