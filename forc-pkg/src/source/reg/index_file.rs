@@ -11,10 +11,8 @@
 //! There are two main things forc needs to be able to do for index files:
 //!   1: Creation of index files from published packages
 //!   2: Calculating correct path for given package index.
-
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Serialize, Deserialize)]
 pub struct IndexFile {
@@ -42,23 +40,23 @@ pub struct PackageEntry {
     /// Name of the package.
     /// This is the actual package name needed in forc.toml file to fetch this
     /// package.
-    name: String,
+    pub(crate) name: String,
     /// Version of the package.
     /// This is the actual package version needed in forc.toml file to fetch
     /// this package.
-    version: semver::Version,
+    pub(crate) version: semver::Version,
     /// IPFS CID of this specific package's source code. This is pinned by
     /// forc.pub at the time of package publishing and thus will be
     /// available all the time.
-    source_cid: String,
+    pub(crate) source_cid: String,
     /// IPFS CID of this specific package's abi. This is pinned by
     /// forc.pub at the time of package publishing and thus will be
     /// available all the time if this exists in the first place, i.e the
     /// package is a contract.
-    abi_cid: Option<String>,
+    pub(crate) abi_cid: Option<String>,
     /// Dependencies of the current package entry. Can be consumed to enable
     /// parallel fetching by the consumers of this index, mainly forc.
-    dependencies: Vec<PackageDependencyIdentifier>,
+    pub(crate) dependencies: Vec<PackageDependencyIdentifier>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -88,6 +86,12 @@ impl PackageEntry {
             abi_cid,
             dependencies,
         }
+    }
+}
+
+impl IndexFile {
+    pub fn get(&self, version: &semver::Version) -> Option<&PackageEntry> {
+        self.versions.get(version)
     }
 }
 

@@ -172,7 +172,10 @@ impl Source {
         // TODO: semver parsing does not work for versions like: 0.1 or ^0.1.
         let semver = semver::Version::parse(version)?;
         println!("asd");
-        let source = reg::Source { version: semver };
+        let source = reg::Source {
+            version: semver,
+            namespace: todo!("add namespace here"),
+        };
         println!("asd");
         Ok(Source::Registry(source))
     }

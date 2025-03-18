@@ -1,7 +1,7 @@
-use crate::source::reg::PackageEntry;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Type of the namespace.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub enum Namespace {
     /// Flat namespace means no specific namespace for different domains.
     /// Location calculator won't be adding anything specific for this to the
@@ -12,41 +12,27 @@ pub enum Namespace {
     Domain(String),
 }
 
-/// Settings to configure file location calculator
-pub struct LocationConfiguration {
-    /// The number of letters used to chunk package name.
-    ///
-    /// Example:
-    /// If set to 2, and package name is "foobar", the index file location
-    /// will be ".../fo/ob/ar/foobar".
-    pub chunking_size: usize,
-    /// Type of the namespacing is needed to determine whether to add domain at
-    /// the beginnig of the file location.
-    pub namespace: Namespace,
-}
-
 /// Calculates the exact file location from the root of the namespace repo.
 /// If the configuration includes a namespace, it will be the first part of
 /// the path followed by chunks.
-pub fn location_from_root(config: &LocationConfiguration, package_entry: &PackageEntry) -> PathBuf {
+pub fn location_from_root(chunk_size: usize, namespace: &Namespace, name: &str) -> PathBuf {
     let mut path = PathBuf::new();
 
     // Add domain to path if namespace is 'Domain'
     // otherwise skip.
-    if let Namespace::Domain(domain) = &config.namespace {
+    if let Namespace::Domain(domain) = namespace {
         path.push(domain);
     }
 
-    let package_name = &package_entry.name;
-
+    let package_name = &name;
     // If chunking is disabled we do not have any folder in the index.
-    if config.chunking_size == 0 {
+    if chunk_size == 0 {
         path.push(package_name);
         return path;
     }
 
     let chars: Vec<char> = package_name.chars().collect();
-    for chunk in chars.chunks(config.chunking_size) {
+    for chunk in chars.chunks(chunk_size) {
         let chunk_str: String = chunk.iter().collect();
         path.push(chunk_str);
     }
@@ -57,9 +43,9 @@ pub fn location_from_root(config: &LocationConfiguration, package_entry: &Packag
 
 #[cfg(test)]
 mod tests {
-    use semver::Version;
-
     use super::*;
+    use crate::source::reg::index_file::PackageEntry;
+    use semver::Version;
     use std::path::Path;
 
     fn create_package_entry(name: &str) -> PackageEntry {
@@ -74,26 +60,22 @@ mod tests {
 
     #[test]
     fn test_flat_namespace_with_small_package() {
-        let config = LocationConfiguration {
-            chunking_size: 2,
-            namespace: Namespace::Flat,
-        };
+        let chunk_size = 2;
+        let namespace = Namespace::Flat;
         let entry = create_package_entry("ab");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         assert_eq!(path, Path::new("ab").join("ab"));
     }
 
     #[test]
     fn test_flat_namespace_with_regular_package() {
-        let config = LocationConfiguration {
-            chunking_size: 2,
-            namespace: Namespace::Flat,
-        };
+        let chunk_size = 2;
+        let namespace = Namespace::Flat;
         let entry = create_package_entry("foobar");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         // Should produce: fo/ob/ar/foobar
         assert_eq!(path, Path::new("fo").join("ob").join("ar").join("foobar"));
@@ -101,13 +83,11 @@ mod tests {
 
     #[test]
     fn test_domain_namespace() {
-        let config = LocationConfiguration {
-            chunking_size: 2,
-            namespace: Namespace::Domain("example.com".to_string()),
-        };
+        let chunk_size = 2;
+        let namespace = Namespace::Domain("example".to_string());
         let entry = create_package_entry("foobar");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         // Should produce: example.com/fo/ob/ar/foobar
         assert_eq!(
@@ -122,13 +102,11 @@ mod tests {
 
     #[test]
     fn test_odd_length_package_name() {
-        let config = LocationConfiguration {
-            chunking_size: 2,
-            namespace: Namespace::Flat,
-        };
+        let chunk_size = 2;
+        let namespace = Namespace::Flat;
         let entry = create_package_entry("hello");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         // Should produce: he/ll/o/hello
         assert_eq!(path, Path::new("he").join("ll").join("o").join("hello"));
@@ -136,13 +114,11 @@ mod tests {
 
     #[test]
     fn test_larger_chunking_size() {
-        let config = LocationConfiguration {
-            chunking_size: 3,
-            namespace: Namespace::Flat,
-        };
+        let chunk_size = 10;
+        let namespace = Namespace::Flat;
         let entry = create_package_entry("fibonacci");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         // Should produce: fib/ona/cci/fibonacci
         assert_eq!(
@@ -153,13 +129,11 @@ mod tests {
 
     #[test]
     fn test_chunking_size_larger_than_name() {
-        let config = LocationConfiguration {
-            chunking_size: 10,
-            namespace: Namespace::Flat,
-        };
+        let chunk_size = 10;
+        let namespace = Namespace::Flat;
         let entry = create_package_entry("small");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         // Should produce: small/small
         assert_eq!(path, Path::new("small").join("small"));
@@ -167,13 +141,11 @@ mod tests {
 
     #[test]
     fn test_unicode_package_name() {
-        let config = LocationConfiguration {
-            chunking_size: 2,
-            namespace: Namespace::Flat,
-        };
+        let chunk_size = 2;
+        let namespace = Namespace::Flat;
         let entry = create_package_entry("héllo");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         // Should produce: hé/ll/o/héllo
         assert_eq!(path, Path::new("hé").join("ll").join("o").join("héllo"));
@@ -181,13 +153,11 @@ mod tests {
 
     #[test]
     fn test_empty_package_name() {
-        let config = LocationConfiguration {
-            chunking_size: 2,
-            namespace: Namespace::Flat,
-        };
+        let chunk_size = 0;
+        let namespace = Namespace::Flat;
         let entry = create_package_entry("");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         // Should just produce: ""
         assert_eq!(path, Path::new(""));
@@ -195,13 +165,11 @@ mod tests {
 
     #[test]
     fn test_chunking_size_zero() {
-        let config = LocationConfiguration {
-            chunking_size: 0,
-            namespace: Namespace::Flat,
-        };
+        let chunk_size = 0;
+        let namespace = Namespace::Flat;
         let entry = create_package_entry("package");
 
-        let path = location_from_root(&config, &entry);
+        let path = location_from_root(chunk_size, &namespace, &entry.name);
 
         // Should just produce: package
         assert_eq!(path, Path::new("package"));
